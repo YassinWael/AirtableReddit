@@ -19,25 +19,46 @@ table = api.table(table_name="reddit",base_id="appgEjnGN8uQYjgjq")
 
 
 
+
 def get_reddit_info(username):
-    user = reddit.redditor(username)
-    status = "active" # default.
-    if hasattr(user,"is_suspended"):
-        ic("suspended alert!")
-        status = "suspended"
+    try:
+        user = reddit.redditor(username)
+        status = "active" # default.
+        if hasattr(user,"is_suspended"):
+            ic("suspended alert!")
+            status = "suspended"
 
 
-    user_info = {
-        "username":user.name,
-        "status":status,
-        "total karma":user.total_karma,
+        user_info = {
+            "username":user.name,
+            "status":status,
+            "total karma":user.total_karma,
 
-    }
-    ic(user_info)
+        }
+        ic(user_info)
+        posts = (list(user.submissions.new(limit = 3)))
+        for post in posts:
+            ic(post.score)
+            ic(post.title)
+
+
+    except Exception as e:
+        ic(f"Error fetching data for {username}: {e}")
+        user_info = {
+            "username":username,
+            "status":"error",
+            "total karma": 0
+        }
     return user_info
 
 
-naruto = get_reddit_info("myvirginityisstrong")
+user1 = get_reddit_info("narutominecraft1")
+user2 = get_reddit_info("Visual_Ad_2500")
+users = [user1,user2]
+users_for_upsert = [{"fields":user} for user in users] # needs to be formatted differently.
+key_fields = ["username","status","total karma"]
+table.batch_upsert(records=users_for_upsert,key_fields=key_fields)
 
-table.create(naruto)
+
+
 # ToDo: Analyse the posts to get the date of the last released one.
