@@ -3,6 +3,8 @@ from pyairtable import Api
 from os import environ
 from dotenv import load_dotenv
 import praw
+import pprint
+from datetime import datetime
 load_dotenv()
 client_id = environ.get("client_id")
 client_secret = environ.get("client_secret")
@@ -22,43 +24,86 @@ table = api.table(table_name="reddit",base_id="appgEjnGN8uQYjgjq")
 
 def get_reddit_info(username):
     try:
-        user = reddit.redditor(username)
+        try:
+            user = reddit.redditor(username)
+        except Exception as e: #banned or deleted
+            user_info = {
+            "username":username,
+            "status":"banned",
+            "total karma": 0
+        }
+
         status = "active" # default.
-        if hasattr(user,"is_suspended"):
-            ic("suspended alert!")
-            status = "suspended"
+       
 
 
+        
+        posts = (list(user.submissions.new(limit = 3)))
+        for post in posts:
+            time_created = datetime.fromtimestamp(post.created)
+            time_now = datetime.now()
+            time_difference = time_now - time_created
+            hours_since_last_post = round(time_difference.seconds / 3600) #excluding days.
+
+            if time_difference.days!=1 or time_difference==0:
+                days_since_last_post = f"{time_difference.days} days and {hours_since_last_post} hours."
+            else:
+                days_since_last_post = f"{time_difference.days} day and {hours_since_last_post} hours."
+
+            
         user_info = {
             "username":user.name,
             "status":status,
             "total karma":user.total_karma,
+            "days_since_last_post":days_since_last_post
 
         }
-        ic(user_info)
-        posts = (list(user.submissions.new(limit = 3)))
-        for post in posts:
-            ic(post.score)
-            ic(post.title)
 
-
+    
     except Exception as e:
-        ic(f"Error fetching data for {username}: {e}")
+        print(f"Error fetching data for {username}: {e}")
+
         user_info = {
             "username":username,
             "status":"error",
             "total karma": 0
         }
+        if "403" in str(e):
+            user_info = {
+            "username":username,
+            "status":"suspended",
+            "total karma": 0
+        }
+    print(f"Finished User: {username}.")
     return user_info
 
 
+all_users = table.all()
+
+users_for_update = []
 user1 = get_reddit_info("narutominecraft1")
 user2 = get_reddit_info("Visual_Ad_2500")
-users = [user1,user2]
-users_for_upsert = [{"fields":user} for user in users] # needs to be formatted differently.
-key_fields = ["username","status","total karma"]
-table.batch_upsert(records=users_for_upsert,key_fields=key_fields)
+user3 = get_reddit_info("Pepower97")
+user4 = get_reddit_info("myvirginityisstrong")
+users = [user1,user2,user3,user4] 
+
+
+
+for i,user in enumerate(users):
+    try:
+        new_user = {
+            "id":all_users[i]["id"],
+            "fields": user
+        }
+        users_for_update.append(new_user)
+    except IndexError: # user isn't in the table.
+        table.create(user)
+
+
+
+table.batch_update(records=users_for_update)
 
 
 
 # ToDo: Analyse the posts to get the date of the last released one.
+# ToDo: seperate comment and post karrma
