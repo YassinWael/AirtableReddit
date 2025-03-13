@@ -3,7 +3,8 @@ from pyairtable import Api
 from os import environ
 from dotenv import load_dotenv
 import praw
-from prawcore import NotFound,Forbidden
+from prawcore import NotFound
+import pprint
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
@@ -71,10 +72,10 @@ def get_reddit_info(username):
         - status: "error"
         - exception: the exception that was raised
     """
-    user_info = {"username":username,"status":"error","age":"","comment_karma":0,"post_karma":0,"total_karma":0} # default
+    user_info = {"username":username,"status":"error","age":"N/A","comment_karma":0,"post_karma":0,"total_karma":0} # default
     try:
         user = reddit.redditor(username)
-        ic(user)
+        
         status = "active" # default.
         user_info.update(
             {
@@ -85,36 +86,45 @@ def get_reddit_info(username):
                 "total_karma":user.total_karma
             }
         )
+        # pprint(vars(user))
         posts = (list(user.submissions.new(limit = 1)))
         if posts:
             last_post = posts[0]
+            # pprint.pprint(vars(last_post))
+            
             time_difference = datetime.now() - datetime.fromtimestamp(last_post.created)
             user_info['days_since_last_post'] = f"{time_difference.days} day{'s' if time_difference.days!=1 else ''} and {time_difference.seconds // 3600} hours"
+            user_info['last_post'] = last_post.url
+            user_info['last_post_subreddit'] = last_post.subreddit_name_prefixed
+
         else:
             user_info['days_since_last_post'] = "No posts"
     except NotFound:
         user_info.update({"status":"banned",})
-    except Forbidden:
-        user_info.update({"status":"suspended"})
     except Exception as e:
-        print(f"Unexpected error for {username}: {e}")
-        user_info.update({"status":"suspended"})
-        
+        if hasattr(user,"is_suspended"):
+            print(f"{username} has been recorded as suspended.")
+            user_info.update({"status":"suspended"})
+        else:
+            print(f"Unexpected error for {username}: {e}")
+            user_info.update({"status":"error"})
+            
+
 
     
-    print(f"Finished User: {username}.")
+    print(f"Finished User: {username}. ({user_info['status']})")
     return user_info
 
 # getting the list of usernames from airtable
 all_users = table.all(fields = ['username'])
 usernames = [user['fields']['username'] for user in all_users]
 
+
 # sending the usernames to the reddit API
 users = [get_reddit_info(user) for user in usernames] 
 
 # mapping username from airtable to ID
 existing_users = {user["fields"]['username']:user['id'] for user in all_users}
-
 
 users_for_update = []
 for user in users:
