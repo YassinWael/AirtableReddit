@@ -20,24 +20,56 @@ api = Api(airtable_api)
 table = api.table(table_name="reddit",base_id="appgEjnGN8uQYjgjq")
 
 
+def get_account_age(user):
+    try:
+        age_created = datetime.fromtimestamp(user.created)
+        time_now = datetime.now()
+        account_age = time_now - age_created
+        if account_age.days > 30:
+            months_since_creation = account_age.days // 30
+            if months_since_creation>12:
+                years_since_creation = months_since_creation // 12
+                remainder_months = round(months_since_creation % 12)
+                ic(years_since_creation,remainder_months)
+
+                if years_since_creation!=1:
+                    account_age = f"{years_since_creation} years and {remainder_months} months."
+                else:
+                    account_age = f"{years_since_creation} year and {remainder_months} months."
+            else:
+                account_age = f"{months_since_creation} months" if months_since_creation!=1 else f"{months_since_creation} month"
+        else:
+            account_age = f"{account_age.days} days" if account_age.days!=1 else f"{account_age.days} day"
+
+
+        
+    except Exception as e:
+        account_age = ""
+    return account_age
+
 
 
 def get_reddit_info(username):
     try:
         try:
             user = reddit.redditor(username)
+            
+            
         except Exception as e: #banned or deleted
             user_info = {
             "username":username,
             "status":"banned",
-            "total karma": 0
+            "age":get_account_age(user),
+            "comment_karma":0,
+            "post_karma":0,
+            "total_karma": 0
         }
 
         status = "active" # default.
-       
-
-
         
+
+
+     
         posts = (list(user.submissions.new(limit = 3)))
         for post in posts:
             time_created = datetime.fromtimestamp(post.created)
@@ -54,11 +86,15 @@ def get_reddit_info(username):
         user_info = {
             "username":user.name,
             "status":status,
-            "total karma":user.total_karma,
+            "age":get_account_age(user),
+            "comment_karma":user.comment_karma,
+            "post_karma":user.link_karma,
+            "total_karma":user.total_karma,
             "days_since_last_post":days_since_last_post
 
         }
 
+        pprint.pprint(vars(user))
     
     except Exception as e:
         print(f"Error fetching data for {username}: {e}")
@@ -66,13 +102,19 @@ def get_reddit_info(username):
         user_info = {
             "username":username,
             "status":"error",
-            "total karma": 0
+            "age":get_account_age(user),
+            "comment_karma":0,
+            "post_karma":0,
+            "total_karma": 0
         }
         if "403" in str(e):
             user_info = {
             "username":username,
             "status":"suspended",
-            "total karma": 0
+            "age":get_account_age(user),
+            "comment_karma":0,
+            "post_karma":0,
+            "total_karma": 0
         }
     print(f"Finished User: {username}.")
     return user_info
@@ -106,4 +148,3 @@ table.batch_update(records=users_for_update)
 
 
 # ToDo: Analyse the posts to get the date of the last released one.
-# ToDo: seperate comment and post karrma
