@@ -3,148 +3,133 @@ from pyairtable import Api
 from os import environ
 from dotenv import load_dotenv
 import praw
-import pprint
+from prawcore import NotFound,Forbidden
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
+
 load_dotenv()
 client_id = environ.get("client_id")
 client_secret = environ.get("client_secret")
 airtable_api = environ.get("airtable_token")
+table_name = environ.get("table_name")
+base_id = environ.get("base_id")
+
 
 
 reddit = praw.Reddit(
     client_id = client_id,
     client_secret = client_secret,
-    user_agent="test by u/narutominecraft1"  # Custom User-Agent (change this)
+    user_agent="python:reddit-airtable-sync:v1.0 (by u/narutominecraft1)"  # Custom User-Agent (change this)
 )
 api = Api(airtable_api)
-table = api.table(table_name="reddit",base_id="appgEjnGN8uQYjgjq")
+table = api.table(table_name=table_name,base_id=base_id)
+
 
 
 def get_account_age(user):
+    """
+    Given a Reddit user object, returns a string describing the user's account age as of the current time.
+    
+    The string is in the format "X year(s) and Y month(s)" if the user's account is at least a year old, or
+    "X month(s)" if it is between 1 and 12 months old, or "X day(s)" if it is less than 1 month old.
+    
+    If the user object does not have a 'created' attribute, the function returns "N/A".
+    """
     try:
-        age_created = datetime.fromtimestamp(user.created)
-        time_now = datetime.now()
-        account_age = time_now - age_created
-        if account_age.days > 30:
-            months_since_creation = account_age.days // 30
-            if months_since_creation>12:
-                years_since_creation = months_since_creation // 12
-                remainder_months = round(months_since_creation % 12)
-                ic(years_since_creation,remainder_months)
-
-                if years_since_creation!=1:
-                    account_age = f"{years_since_creation} years and {remainder_months} months."
-                else:
-                    account_age = f"{years_since_creation} year and {remainder_months} months."
-            else:
-                account_age = f"{months_since_creation} months" if months_since_creation!=1 else f"{months_since_creation} month"
+        created = datetime.fromtimestamp(user.created)
+        now = datetime.now()
+        delta = relativedelta(now, created)
+        if delta.years > 0:
+            return f"{delta.years} year{'s' if delta.years != 1 else ''} and {delta.months} month{'s' if delta.months != 1 else ''}"
+        elif delta.months > 0:
+            return f"{delta.months} month{'s' if delta.months != 1 else ''}"
         else:
-            account_age = f"{account_age.days} days" if account_age.days!=1 else f"{account_age.days} day"
-
-
-        
-    except Exception as e:
-        account_age = ""
-    return account_age
-
-
+            return f"{delta.days} day{'s' if delta.days != 1 else ''}"
+    except AttributeError:
+        return "N/A"
 
 def get_reddit_info(username):
+    """
+    Given a reddit username, returns a dictionary of information about that user.
+    
+    If the user is found, the dictionary will contain the following keys:
+        - username: the username given to this function
+        - status: The status of the user. Either "active", "banned", or "suspended"
+        - age: the age of the account, in years, months, or days
+        - comment_karma: the user's comment karma
+        - post_karma: the user's post karma
+        - total_karma: the sum of the user's comment and post karma
+        - days_since_last_post: the time difference between the current time and the last post the user made,
+            formatted as "X day(s) and Y hour(s)"
+    
+    If the user is not found, the dictionary will only contain the following keys:
+        - username: the username given to this function
+        - status: "error"
+    
+    If there is an unexpected error, the dictionary will contain the following keys:
+        - username: the username given to this function
+        - status: "error"
+        - exception: the exception that was raised
+    """
+    user_info = {"username":username,"status":"error","age":"","comment_karma":0,"post_karma":0,"total_karma":0} # default
     try:
-        try:
-            user = reddit.redditor(username)
-            
-            
-        except Exception as e: #banned or deleted
-            user_info = {
-            "username":username,
-            "status":"banned",
-            "age":get_account_age(user),
-            "comment_karma":0,
-            "post_karma":0,
-            "total_karma": 0
-        }
-
+        user = reddit.redditor(username)
+        ic(user)
         status = "active" # default.
+        user_info.update(
+            {
+                "status":status,
+                "age":get_account_age(user),
+                "comment_karma":user.comment_karma,
+                "post_karma":user.link_karma,
+                "total_karma":user.total_karma
+            }
+        )
+        posts = (list(user.submissions.new(limit = 1)))
+        if posts:
+            last_post = posts[0]
+            time_difference = datetime.now() - datetime.fromtimestamp(last_post.created)
+            user_info['days_since_last_post'] = f"{time_difference.days} day{'s' if time_difference.days!=1 else ''} and {time_difference.seconds // 3600} hours"
+        else:
+            user_info['days_since_last_post'] = "No posts"
+    except NotFound:
+        user_info.update({"status":"banned",})
+    except Forbidden:
+        user_info.update({"status":"suspended"})
+    except Exception as e:
+        print(f"Unexpected error for {username}: {e}")
+        user_info.update({"status":"suspended"})
         
 
-
-     
-        posts = (list(user.submissions.new(limit = 3)))
-        for post in posts:
-            time_created = datetime.fromtimestamp(post.created)
-            time_now = datetime.now()
-            time_difference = time_now - time_created
-            hours_since_last_post = round(time_difference.seconds / 3600) #excluding days.
-
-            if time_difference.days!=1 or time_difference==0:
-                days_since_last_post = f"{time_difference.days} days and {hours_since_last_post} hours."
-            else:
-                days_since_last_post = f"{time_difference.days} day and {hours_since_last_post} hours."
-
-            
-        user_info = {
-            "username":user.name,
-            "status":status,
-            "age":get_account_age(user),
-            "comment_karma":user.comment_karma,
-            "post_karma":user.link_karma,
-            "total_karma":user.total_karma,
-            "days_since_last_post":days_since_last_post
-
-        }
-
-        pprint.pprint(vars(user))
     
-    except Exception as e:
-        print(f"Error fetching data for {username}: {e}")
-
-        user_info = {
-            "username":username,
-            "status":"error",
-            "age":get_account_age(user),
-            "comment_karma":0,
-            "post_karma":0,
-            "total_karma": 0
-        }
-        if "403" in str(e):
-            user_info = {
-            "username":username,
-            "status":"suspended",
-            "age":get_account_age(user),
-            "comment_karma":0,
-            "post_karma":0,
-            "total_karma": 0
-        }
     print(f"Finished User: {username}.")
     return user_info
 
+# getting the list of usernames from airtable
+all_users = table.all(fields = ['username'])
+usernames = [user['fields']['username'] for user in all_users]
 
-all_users = table.all()
+# sending the usernames to the reddit API
+users = [get_reddit_info(user) for user in usernames] 
+
+# mapping username from airtable to ID
+existing_users = {user["fields"]['username']:user['id'] for user in all_users}
+
 
 users_for_update = []
-user1 = get_reddit_info("narutominecraft1")
-user2 = get_reddit_info("Visual_Ad_2500")
-user3 = get_reddit_info("Pepower97")
-user4 = get_reddit_info("myvirginityisstrong")
-users = [user1,user2,user3,user4] 
+for user in users:
+    if user['username'] in existing_users: #user already exists
+        users_for_update.append({"id":existing_users[user['username']],"fields":user})
 
-
-
-for i,user in enumerate(users):
-    try:
-        new_user = {
-            "id":all_users[i]["id"],
-            "fields": user
-        }
-        users_for_update.append(new_user)
-    except IndexError: # user isn't in the table.
+    else: #user doesn't exist
         table.create(user)
 
+if users_for_update:
+    table.batch_update(records=users_for_update)
 
 
-table.batch_update(records=users_for_update)
 
 
 
-# ToDo: Analyse the posts to get the date of the last released one.
+
+
