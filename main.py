@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import praw
 from prawcore import NotFound
 import pprint
+import time
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
@@ -14,7 +15,7 @@ client_secret = environ.get("client_secret")
 airtable_api = environ.get("airtable_token")
 table_name = environ.get("table_name")
 base_id = environ.get("base_id")
-
+start_time = time.time()
 
 
 reddit = praw.Reddit(
@@ -139,7 +140,8 @@ if users_for_update:
 
 
 
-
+end_time = time.time()
+print(f"It took {round(end_time - start_time,2)} seconds to run this script.")
 
 
 
