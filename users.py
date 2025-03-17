@@ -18,6 +18,7 @@ base_id = environ.get("base_id")
 start_time = time.time()
 
 
+
 reddit = praw.Reddit(
     client_id = client_id,
     client_secret = client_secret,
@@ -91,7 +92,8 @@ def get_reddit_info(username):
         posts = (list(user.submissions.new(limit = 1)))
         if posts:
             last_post = posts[0]
-            # pprint.pprint(vars(last_post))
+            pprint.pprint(vars(last_post))
+            quit()
             
             time_difference = datetime.now() - datetime.fromtimestamp(last_post.created)
             user_info['days_since_last_post'] = f"{time_difference.days} day{'s' if time_difference.days!=1 else ''} and {time_difference.seconds // 3600} hours"
@@ -140,8 +142,6 @@ if users_for_update:
 
 
 
+
 end_time = time.time()
 print(f"It took {round(end_time - start_time,2)} seconds to run this script.")
-
-
-
