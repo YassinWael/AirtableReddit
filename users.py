@@ -1,3 +1,4 @@
+from pprint import pprint
 from icecream import ic
 from pyairtable import Api
 from os import environ
@@ -89,10 +90,10 @@ def get_reddit_info(username,table_name=""):
                 "Total_karma":user.total_karma
             }
         )
-        # pprint(vars(user))
-        posts = (list(user.submissions.new(limit = 1)))
+        posts = (list(user.submissions.new(limit = 2)))
         if posts and table_name=="": # to make sure we're not on the accounts table
-            last_post = posts[0]
+            last_post = posts[0] if posts[0].pinned == False else posts[1]
+            
          
             
             time_difference = datetime.now() - datetime.fromtimestamp(last_post.created)
