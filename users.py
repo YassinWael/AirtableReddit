@@ -90,9 +90,10 @@ def get_reddit_info(username,table_name=""):
                 "Total_karma":user.total_karma
             }
         )
-        posts = (list(user.submissions.new(limit = 2)))
+        posts = (list(user.submissions.new(limit = 4)))
+        non_pinned_posts = [post for post in posts if not post.pinned]
         if posts and table_name=="": # to make sure we're not on the accounts table
-            last_post = posts[0] if posts[0].pinned == False else posts[1]
+            last_post = non_pinned_posts[0] if non_pinned_posts else None
             
          
             
